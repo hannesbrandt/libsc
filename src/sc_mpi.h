@@ -773,6 +773,12 @@ typedef struct sc_no_mpiio_file *sc_MPI_File;
 
 #endif /* !SC_ENABLE_MPIIO */
 
+int sc_wrap_Isend (const void *buf, size_t count, sc_MPI_Datatype datatype,
+               int dest, int tag, sc_MPI_Comm comm, sc_MPI_Request *request);
+
+int sc_wrap_Irecv (void *buf, size_t count, sc_MPI_Datatype datatype,
+               int source, int tag, sc_MPI_Comm comm, sc_MPI_Request *request);
+
 /** Turn an MPI error code into its error class.
  * When MPI is enabled, we pass version 1.1 errors to MPI_Error_class.
  * When MPI I/O is not enabled, we process file errors outside of MPI.
