@@ -86,6 +86,36 @@
 #define SC_NOCOUNT_LOGINDENT
 #endif
 
+/* implement the default visibility attribute */
+
+#if defined _WIN32 || defined __CYGWIN__
+#if 0
+  /* this is currently not properly tested */
+  #ifdef BUILDING_DLL
+    #ifdef __GNUC__
+      #define SC_DLL_PUBLIC __attribute__ ((dllexport))
+    #else
+      #define SC_DLL_PUBLIC __declspec(dllexport)
+    #endif
+  #else
+    #ifdef __GNUC__
+      #define SC_DLL_PUBLIC __attribute__ ((dllimport))
+    #else
+      #define SC_DLL_PUBLIC __declspec(dllimport)
+    #endif
+  #endif
+#else
+  /* while disabling the above definitions */
+  #define SC_DLL_PUBLIC
+#endif
+#else
+  #if __GNUC__ >= 4
+    #define SC_DLL_PUBLIC __attribute__ ((visibility ("default")))
+  #else
+    #define SC_DLL_PUBLIC
+  #endif
+#endif
+
 /* use this in case mpi.h includes stdint.h */
 
 #ifndef __STDC_LIMIT_MACROS
@@ -95,6 +125,18 @@
 #ifndef __STDC_CONSTANT_MACROS
 /** Activate C99 constant macros for older C++ compilers. */
 #define __STDC_CONSTANT_MACROS
+#endif
+
+/** ​Platform-specific noreturn and printf format string checks​​ */
+#ifdef _MSC_VER
+#include <sal.h> /* _Printf_format_string_ */
+#define SC_NORETURN __declspec(noreturn)
+#define SC_PRINTF_LIKE(fmt_idx, first_arg)
+#define SC_PRINTF_FMT _Printf_format_string_
+#else
+#define SC_NORETURN __attribute__((noreturn))
+#define SC_PRINTF_LIKE(fmt_idx, first_arg) __attribute__((format(printf, fmt_idx, first_arg)))
+#define SC_PRINTF_FMT
 #endif
 
 /* include MPI before stdio.h */
@@ -217,18 +259,21 @@ SC_EXTERN_C_BEGIN;
 extern const int    sc_log2_lookup_table[256];
 
 /** libsc allows for multiple packages to use their own log priorities etc.
- * This is the package id for core sc functions, which is meant to be read only.
- * It starts out with a value of -1, which is fine by itself.
+ * Logging priorities, callbacks, and memory balance counters go by package.
+ * This is the package id for core sc functions and is meant to be read only.
+ * The variable starts out with a value of -1, which is fine by itself.
  * It is set to a non-negative value by the (optional) \ref sc_init.
+ * Calling the (also optional) \ref sc_finalize resets it to -1.  There is
+ * no need to access this variable directly; use \ref sc_get_package_id.
  */
-extern int          sc_package_id;
+extern SC_DLL_PUBLIC int sc_package_id;
 
 /** Optional trace file for logging (see \ref sc_init).
  * Initialized to NULL. */
-extern FILE        *sc_trace_file;
+extern SC_DLL_PUBLIC FILE *sc_trace_file;
 
 /** Optional minimum log priority for messages that go into the trace file. */
-extern int          sc_trace_prio;
+extern SC_DLL_PUBLIC int sc_trace_prio;
 
 /** Define machine epsilon for the double type. */
 #define SC_EPS               2.220446049250313e-16
@@ -253,11 +298,11 @@ extern int          sc_trace_prio;
  * 2. Use macros in C instead of the function
  * This loses __FILE__ and __LINE__ in the C++ ..F log functions
  */
-void                SC_ABORTF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)))
-  __attribute__ ((noreturn));
-void                SC_CHECK_ABORTF (int success, const char *fmt, ...)
-  __attribute__ ((format (printf, 2, 3)));
+SC_NORETURN
+void                SC_ABORTF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_CHECK_ABORTF (int success, SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(2, 3);
 #ifndef __cplusplus
 #define SC_ABORTF(fmt,...)                                      \
   sc_abort_verbosef (__FILE__, __LINE__, (fmt), __VA_ARGS__)
@@ -417,21 +462,24 @@ void                SC_CHECK_ABORTF (int success, const char *fmt, ...)
 #define SC_LP_INFO        4     /**< Most relevant things a function is doing. */
 #define SC_LP_STATISTICS  5     /**< Important for consistency/performance. */
 #define SC_LP_PRODUCTION  6     /**< A few lines at most for a major api function. */
-#define SC_LP_ESSENTIAL   7     /**< Log a few lines max per program. */
+#define SC_LP_ESSENTIAL   7     /**< Log a few lines max (version info) per program. */
 #define SC_LP_ERROR       8     /**< Log errors only.  This is suggested over \ref SC_LP_SILENT. */
 #define SC_LP_SILENT      9     /**< Never log anything.  Instead suggesting \ref SC_LP_ERROR. */
 /** @} */
 
-/** The log priority for the sc package.
- *
- */
+/* The default log priority may be overridden by this preprocessor define. */
 #ifdef SC_LOG_PRIORITY
 #define SC_LP_THRESHOLD SC_LOG_PRIORITY
+#define SC_LP_APPLICATION SC_LOG_PRIORITY
 #else
 #ifdef SC_ENABLE_DEBUG
 #define SC_LP_THRESHOLD SC_LP_TRACE
+#define SC_LP_APPLICATION SC_LP_DEBUG
 #else
+/** The log threshold chosen by \ref SC_LP_DEFAULT. */
 #define SC_LP_THRESHOLD SC_LP_INFO
+/** This threshold is intended for applications with conservative logging. */
+#define SC_LP_APPLICATION SC_LP_STATISTICS
 #endif
 #endif
 
@@ -442,12 +490,12 @@ void                SC_CHECK_ABORTF (int success, const char *fmt, ...)
 #define SC_GLOBAL_LOG(p,s) SC_GEN_LOG (sc_package_id, SC_LC_GLOBAL, (p), (s))
 #define SC_LOG(p,s) SC_GEN_LOG (sc_package_id, SC_LC_NORMAL, (p), (s))
 void                SC_GEN_LOGF (int package, int category, int priority,
-                                 const char *fmt, ...)
-  __attribute__ ((format (printf, 4, 5)));
-void                SC_GLOBAL_LOGF (int priority, const char *fmt, ...)
-  __attribute__ ((format (printf, 2, 3)));
-void                SC_LOGF (int priority, const char *fmt, ...)
-  __attribute__ ((format (printf, 2, 3)));
+                                 SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(4, 5);
+void                SC_GLOBAL_LOGF (int priority, SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(2, 3);
+void                SC_LOGF (int priority, SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(2, 3);
 #ifndef __cplusplus
 #define SC_GEN_LOGF(package,category,priority,fmt,...)                  \
   ((priority) < SC_LP_THRESHOLD ? (void) 0 :                            \
@@ -468,22 +516,22 @@ void                SC_LOGF (int priority, const char *fmt, ...)
 #define SC_GLOBAL_PRODUCTION(s) SC_GLOBAL_LOG (SC_LP_PRODUCTION, (s))
 #define SC_GLOBAL_ESSENTIAL(s) SC_GLOBAL_LOG (SC_LP_ESSENTIAL, (s))
 #define SC_GLOBAL_LERROR(s) SC_GLOBAL_LOG (SC_LP_ERROR, (s))
-void                SC_GLOBAL_TRACEF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_GLOBAL_LDEBUGF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_GLOBAL_VERBOSEF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_GLOBAL_INFOF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_GLOBAL_STATISTICSF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
+void                SC_GLOBAL_TRACEF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_GLOBAL_LDEBUGF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_GLOBAL_VERBOSEF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_GLOBAL_INFOF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_GLOBAL_STATISTICSF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
 void                SC_GLOBAL_PRODUCTIONF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_GLOBAL_ESSENTIALF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_GLOBAL_LERRORF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
+  SC_PRINTF_LIKE(1, 2);
+void                SC_GLOBAL_ESSENTIALF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_GLOBAL_LERRORF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
 #ifndef __cplusplus
 #define SC_GLOBAL_TRACEF(fmt,...)                       \
   SC_GLOBAL_LOGF (SC_LP_TRACE, (fmt), __VA_ARGS__)
@@ -512,22 +560,22 @@ void                SC_GLOBAL_LERRORF (const char *fmt, ...)
 #define SC_PRODUCTION(s) SC_LOG (SC_LP_PRODUCTION, (s))
 #define SC_ESSENTIAL(s) SC_LOG (SC_LP_ESSENTIAL, (s))
 #define SC_LERROR(s) SC_LOG (SC_LP_ERROR, (s))
-void                SC_TRACEF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_LDEBUGF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_VERBOSEF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_INFOF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_STATISTICSF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_PRODUCTIONF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_ESSENTIALF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
-void                SC_LERRORF (const char *fmt, ...)
-  __attribute__ ((format (printf, 1, 2)));
+void                SC_TRACEF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_LDEBUGF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_VERBOSEF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_INFOF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_STATISTICSF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_PRODUCTIONF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_ESSENTIALF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
+void                SC_LERRORF (SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(1, 2);
 #ifndef __cplusplus
 #define SC_TRACEF(fmt,...)                      \
   SC_LOGF (SC_LP_TRACE, (fmt), __VA_ARGS__)
@@ -555,9 +603,7 @@ void                SC_LERRORF (const char *fmt, ...)
  * or some other numerical literal to a string. */
 #define SC_TOSTRING(x) _SC_TOSTRING(x)
 
-/* callback typedefs */
-
-typedef void        (*sc_handler_t) (void *data);
+/** Type of the log handler function. */
 typedef void        (*sc_log_handler_t) (FILE * log_stream,
                                          const char *filename, int lineno,
                                          int package, int category,
@@ -620,17 +666,41 @@ void                sc_set_abort_handler (sc_abort_handler_t abort_handler);
 
 /** The central log function to be called by all packages.
  * Dispatches the log calls by package and filters by category and priority.
+ * \param [in] filename  Usually used with a __FILE__ argument.
+ * \param [in] lineno    Usually used with a __LINE__ argument.
  * \param [in] package   Must be a registered package id or -1.
  * \param [in] category  Must be SC_LC_NORMAL or SC_LC_GLOBAL.
  * \param [in] priority  Must be > SC_LP_ALWAYS and < SC_LP_SILENT.
+ * \param [in] msg       Nul-terminated string to print.
  */
 void                sc_log (const char *filename, int lineno,
                             int package, int category, int priority,
                             const char *msg);
+
+/** The printf-style log function to be called by all packages.
+ * Dispatches the log calls by package and filters by category and priority.
+ * \param [in] filename  Usually used with a __FILE__ argument.
+ * \param [in] lineno    Usually used with a __LINE__ argument.
+ * \param [in] package   Must be a registered package id or -1.
+ * \param [in] category  Must be SC_LC_NORMAL or SC_LC_GLOBAL.
+ * \param [in] priority  Must be > SC_LP_ALWAYS and < SC_LP_SILENT.
+ * \param [in] fmt       String of printf convention to log.
+ */
 void                sc_logf (const char *filename, int lineno,
                              int package, int category, int priority,
-                             const char *fmt, ...)
-  __attribute__ ((format (printf, 6, 7)));
+                             SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(6, 7);
+
+/** The vprintf-style log function to be called by all packages.
+ * Dispatches the log calls by package and filters by category and priority.
+ * \param [in] filename  Usually used with a __FILE__ argument.
+ * \param [in] lineno    Usually used with a __LINE__ argument.
+ * \param [in] package   Must be a registered package id or -1.
+ * \param [in] category  Must be SC_LC_NORMAL or SC_LC_GLOBAL.
+ * \param [in] priority  Must be > SC_LP_ALWAYS and < SC_LP_SILENT.
+ * \param [in] fmt       String of vprintf convention to log.
+ * \param [in] ap        Must be initialized by va_start.
+ */
 void                sc_logv (const char *filename, int lineno,
                              int package, int category, int priority,
                              const char *fmt, va_list ap);
@@ -648,28 +718,28 @@ void                sc_log_indent_push (void);
 void                sc_log_indent_pop (void);
 
 /** Print a stack trace, call the abort handler and then call abort (). */
-void                sc_abort (void)
-  __attribute__ ((noreturn));
+SC_NORETURN
+void                sc_abort (void);
 
 /** Print a message to stderr and then call sc_abort (). */
+SC_NORETURN
 void                sc_abort_verbose (const char *filename, int lineno,
-                                      const char *msg)
-  __attribute__ ((noreturn));
+                                      const char *msg);
 
 /** Print a message to stderr and then call sc_abort (). */
+SC_NORETURN
 void                sc_abort_verbosef (const char *filename, int lineno,
-                                       const char *fmt, ...)
-  __attribute__ ((format (printf, 3, 4)))
-  __attribute__ ((noreturn));
+                                       SC_PRINTF_FMT const char *fmt, ...)
+  SC_PRINTF_LIKE(3, 4);
 
 /** Print a message to stderr and then call sc_abort (). */
+SC_NORETURN
 void                sc_abort_verbosev (const char *filename, int lineno,
-                                       const char *fmt, va_list ap)
-  __attribute__ ((noreturn));
+                                       const char *fmt, va_list ap);
 
 /** Collective abort where only root prints a message */
-void                sc_abort_collective (const char *msg)
-  __attribute__ ((noreturn));
+SC_NORETURN
+void                sc_abort_collective (const char *msg);
 
 /** Register a software package with SC.
  * This function must only be called before additional threads are created.
@@ -713,6 +783,7 @@ void                sc_package_unlock (int package_id);
  * This can be called at any point in the program, any number of times.
  * It can only lower the verbosity at and below the value of SC_LP_THRESHOLD.
  * \param [in] package_id       Must be a registered package identifier.
+ * \param [in] log_priority     The minimum priority required to output.
  */
 void                sc_package_set_verbosity (int package_id,
                                               int log_priority);
@@ -829,8 +900,8 @@ void                sc_strcopy (char *dest, size_t size, const char *src);
  * \param [in] format   Format string as in man (3) snprintf.
  */
 void                sc_snprintf (char *str, size_t size,
-                                 const char *format, ...)
-  __attribute__ ((format (printf, 3, 4)));
+                                 SC_PRINTF_FMT const char *format, ...)
+  SC_PRINTF_LIKE(3, 4);
 
 /** Return the full version of libsc.
  *
@@ -853,6 +924,11 @@ int                 sc_version_major (void);
  * \return          Return the minor version of libsc.
  */
 int                 sc_version_minor (void);
+
+/** Perform a runtime check for the integer endian convention.
+ * \return          True if byte order is little endian, false otherwise.
+ */
+int                 sc_is_littleendian (void);
 
 #if 0
 /* Sadly, the point version macro by autoconf doesn't work with vX and vX.Y.
@@ -877,6 +953,12 @@ int                 sc_have_zlib (void);
  * \return          True if and only if SC_HAVE_JSON is defined.
  */
 int                 sc_have_json (void);
+
+/** Portable function to sleep a prescribed amount of milliseconds.
+ *
+ * \param [in] milliseconds The number of milliseconds to sleep.
+ */
+void                sc_sleep (unsigned milliseconds);
 
 SC_EXTERN_C_END;
 

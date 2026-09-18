@@ -66,6 +66,15 @@
 #ifndef SC_MPI_H
 #define SC_MPI_H
 
+/** ​Platform-specific noreturn */
+#ifndef SC_NORETURN
+#ifdef _MSC_VER
+#define SC_NORETURN __declspec(noreturn)
+#else
+#define SC_NORETURN __attribute__((noreturn))
+#endif
+#endif
+
 /* this works both standalone and when included from sc.h */
 #include <sc_config.h>
 #ifdef SC_ENABLE_MPI
@@ -73,6 +82,16 @@
 #endif
 
 SC_EXTERN_C_BEGIN;
+
+/** Return whether MPI is configured.
+ * \return          Boolean corresponding to define SC_ENABLE_MPI.
+ */
+int                 sc_mpi_is_enabled (void);
+
+/** Return whether MPI supports type split and shared windows.
+ * \return          Boolean corresponding to #define SC_ENABLE_MPISHARED.
+ */
+int                 sc_mpi_is_shared (void);
 
 /** Enumerate all MPI tags used internally to the sc library. */
 typedef enum
@@ -172,7 +191,6 @@ sc_MPI_IO_Errorcode_t;
 #define sc_MPI_COMM_NULL           MPI_COMM_NULL
 #define sc_MPI_COMM_WORLD          MPI_COMM_WORLD
 #define sc_MPI_COMM_SELF           MPI_COMM_SELF
-#define sc_MPI_COMM_TYPE_SHARED    MPI_COMM_TYPE_SHARED
 
 #define sc_MPI_GROUP_NULL          MPI_GROUP_NULL
 #define sc_MPI_GROUP_EMPTY         MPI_GROUP_EMPTY
@@ -276,7 +294,6 @@ sc_MPI_IO_Errorcode_t;
 #define sc_MPI_Comm_dup            MPI_Comm_dup
 #define sc_MPI_Comm_create         MPI_Comm_create
 #define sc_MPI_Comm_split          MPI_Comm_split
-#define sc_MPI_Comm_split_type     MPI_Comm_split_type
 #define sc_MPI_Comm_free           MPI_Comm_free
 #define sc_MPI_Comm_size           MPI_Comm_size
 #define sc_MPI_Comm_rank           MPI_Comm_rank
@@ -310,6 +327,7 @@ sc_MPI_IO_Errorcode_t;
 #define sc_MPI_Irecv               MPI_Irecv
 #define sc_MPI_Send                MPI_Send
 #define sc_MPI_Isend               MPI_Isend
+#define sc_MPI_Sendrecv            MPI_Sendrecv
 #define sc_MPI_Probe               MPI_Probe
 #define sc_MPI_Iprobe              MPI_Iprobe
 #define sc_MPI_Get_count           MPI_Get_count
@@ -474,8 +492,8 @@ int                 sc_MPI_Finalize (void);
  * \param [in] mpicomm      Communicator across which to abort.
  * \param [in] ecode        Error code returned to the system.
  */
-int                 sc_MPI_Abort (sc_MPI_Comm mpicomm, int ecode)
-  __attribute__ ((noreturn));
+SC_NORETURN
+int                 sc_MPI_Abort (sc_MPI_Comm mpicomm, int ecode);
 
 /** Duplicate an MPI communicator.
  * \param [in] mpicomm      Communicator to duplicate.
@@ -665,6 +683,9 @@ int                 sc_MPI_Send (void *, int, sc_MPI_Datatype, int, int,
                                  sc_MPI_Comm);
 int                 sc_MPI_Isend (void *, int, sc_MPI_Datatype, int, int,
                                   sc_MPI_Comm, sc_MPI_Request *);
+int                 sc_MPI_Sendrecv (const void *, int, sc_MPI_Datatype, int,
+                                     int, void *, int, sc_MPI_Datatype, int,
+                                     int, sc_MPI_Comm, sc_MPI_Status *);
 int                 sc_MPI_Probe (int, int, sc_MPI_Comm, sc_MPI_Status *);
 int                 sc_MPI_Iprobe (int, int, sc_MPI_Comm, int *,
                                    sc_MPI_Status *);
@@ -684,6 +705,23 @@ int                 sc_MPI_Waitsome (int, sc_MPI_Request *,
 int                 sc_MPI_Waitall (int, sc_MPI_Request *, sc_MPI_Status *);
 int                 sc_MPI_Testall (int, sc_MPI_Request *, int *,
                                     sc_MPI_Status *);
+
+/* This is based on configuration checks */
+#if defined SC_ENABLE_MPI && defined SC_ENABLE_MPICOMMSHARED
+#define sc_MPI_COMM_TYPE_SHARED    MPI_COMM_TYPE_SHARED
+#else
+#define sc_MPI_COMM_TYPE_SHARED    sc_MPI_UNDEFINED
+#endif
+
+/** Wrapper to split an MPI communicator by shared node type.
+ * With MPI and MPICOMMSHARED enabled, call MPI_Comm_split type.
+ * Otherwise, call sc_MPI_Comm_split with the rank as color and key.
+ * Without MPI, the latter falls back to duplicate the communicator.
+ */
+int                 sc_MPI_Comm_split_type (sc_MPI_Comm mpicomm,
+                                            int split_type, int key,
+                                            sc_MPI_Info info,
+                                            sc_MPI_Comm *newcomm);
 
 #if defined SC_ENABLE_MPI && defined SC_ENABLE_MPITHREAD
 

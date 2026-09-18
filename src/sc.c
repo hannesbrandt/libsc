@@ -45,7 +45,19 @@ typedef void        (*sc_sig_t) (int);
 
 #ifdef _MSC_VER
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
+#include <malloc.h>
+#endif
+
+#if _POSIX_C_SOURCE >= 199309L
+#include <time.h>
+#else
+#ifdef _WIN32
+#   include <io.h>
+#else
+#   include <unistd.h>
+#endif
 #endif
 
 typedef struct sc_package
@@ -138,6 +150,26 @@ sc_extern_c_hack_2 (void)
   /* Completing the hack in sc.h on providing the prototype.
      We use the macro SC_EXTER_C_END; after declaring all functions,
      just before the final include-once check, to ensure C linkage. */
+}
+
+int
+sc_mpi_is_enabled (void)
+{
+#ifdef SC_ENABLE_MPI
+  return 1;
+#else
+  return 0;
+#endif
+}
+
+int
+sc_mpi_is_shared (void)
+{
+#ifdef SC_ENABLE_MPISHARED
+  return 1;
+#else
+  return 0;
+#endif
 }
 
 #ifdef SC_ENABLE_PTHREAD
@@ -380,7 +412,7 @@ sc_malloc_aligned (size_t alignment, size_t size)
                     "Returned NULL from aligned_alloc");
     return data;
   }
-#elif defined SC_HAVE_ANY_MEMALIGN && defined SC_HAVE_ALIGNED_MALLOC
+#elif (defined SC_HAVE_ANY_MEMALIGN && defined SC_HAVE_ALIGNED_MALLOC) || defined(_MSC_VER)
   /* MinGW, MSVC */
   {
     void               *data = _aligned_malloc (size, alignment);
@@ -449,7 +481,9 @@ sc_free_aligned (void *ptr, size_t alignment)
   SC_ASSERT (sizeof (char **) >= sizeof (size_t));
   SC_ASSERT (alignment > 0 && alignment % sizeof (void *) == 0);
 
-#if defined SC_HAVE_ANY_MEMALIGN && \
+#ifdef _MSC_VER
+  _aligned_free(ptr);
+#elif defined SC_HAVE_ANY_MEMALIGN && \
    (defined SC_HAVE_POSIX_MEMALIGN || defined SC_HAVE_ALIGNED_ALLOC)
   free (ptr);
 #else
@@ -512,7 +546,11 @@ sc_realloc_aligned (void *ptr, size_t alignment, size_t size)
   SC_ASSERT (alignment > 0 && alignment % sizeof (void *) == 0);
   SC_ASSERT (alignment == SC_MEMALIGN_BYTES);
 
-#if defined SC_HAVE_ANY_MEMALIGN && \
+#ifdef _MSC_VER
+  /* alignment must be power of 2 */
+  SC_ASSERT((alignment > 0) && ((alignment & (alignment - 1)) == 0));
+  return _aligned_realloc(ptr, size, alignment);
+#elif defined SC_HAVE_ANY_MEMALIGN && \
    (defined SC_HAVE_POSIX_MEMALIGN || defined SC_HAVE_ALIGNED_ALLOC)
   /* the result is no longer aligned */
   return realloc (ptr, size);
@@ -1008,7 +1046,7 @@ void
 sc_abort (void)
 {
   sc_default_abort_handler ();
-  abort ();                     /* if the user supplied callback incorrecty returns, abort */
+  abort ();                     /* if the user supplied callback incorrectly returns, abort */
 }
 
 static void
@@ -1287,7 +1325,6 @@ sc_init (sc_MPI_Comm mpicomm,
          int catch_signals, int print_backtrace,
          sc_log_handler_t log_handler, int log_threshold)
 {
-  int                 w;
   const char         *trace_file_name;
   const char         *trace_file_prio;
 
@@ -1353,27 +1390,10 @@ sc_init (sc_MPI_Comm mpicomm,
     }
   }
 
-  w = 24;
+  /* one line of logging if the threshold is not SC_LP_SILENT */
   SC_GLOBAL_ESSENTIALF ("This is %s\n", SC_PACKAGE_STRING);
-#if 0
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "F77", SC_F77);
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "FFLAGS", SC_FFLAGS);
-#endif
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "CPP", SC_CPP);
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "CPPFLAGS", SC_CPPFLAGS);
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "CC", SC_CC);
-#if 0
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "C_VERSION", SC_C_VERSION);
-#endif
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "CFLAGS", SC_CFLAGS);
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "LDFLAGS", SC_LDFLAGS);
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "LIBS", SC_LIBS);
-#if 0
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "BLAS_LIBS", SC_BLAS_LIBS);
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "LAPACK_LIBS", SC_LAPACK_LIBS);
-  SC_GLOBAL_PRODUCTIONF ("%-*s %s\n", w, "FLIBS", SC_FLIBS);
-#endif
-
+  SC_GLOBAL_INFOF ("MPI is enabled %d shared %d\n",
+                   sc_mpi_is_enabled (), sc_mpi_is_shared ());
   sc_initialized = 1;
 }
 
@@ -1608,6 +1628,16 @@ sc_version_point (void)
 #endif
 
 int
+sc_is_littleendian (void)
+{
+  /* We use the volatile keyword to deactivate compiler optimizations related
+   * to the variable uint.
+   */
+  const volatile uint32_t uint = 1;
+  return *(char *) &uint == 1;
+}
+
+int
 sc_have_zlib (void)
 {
 #ifndef SC_HAVE_ZLIB
@@ -1624,5 +1654,27 @@ sc_have_json (void)
   return 0;
 #else
   return 1;
+#endif
+}
+
+void
+sc_sleep (unsigned milliseconds){
+#if _POSIX_C_SOURCE >= 199309L
+  struct timespec ts;
+  /* full seconds */
+  ts.tv_sec = milliseconds / 1000;
+  /* nanoseconds */
+  ts.tv_nsec = (milliseconds % 1000) * 1000000;
+  nanosleep (&ts, NULL);
+#elif defined(_POSIX_C_SOURCE)
+  /* older POSIX */
+  if (milliseconds >= 1000) {
+    sleep (milliseconds / 1000);
+  }
+  usleep ((milliseconds % 1000) * 1000);
+#elif _MSC_VER
+  Sleep (milliseconds);
+#else
+  SC_ABORT ("No suitable sleep function available.");
 #endif
 }

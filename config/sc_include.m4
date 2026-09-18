@@ -127,7 +127,7 @@ dnl its INVOCATION is one valid statement of a C/C++ program.
 dnl It may require INCLUDE statements to compile and link ok.
 dnl On the inside we call AC_LANG_PROGRAM(INCLUDE, INVOCATION).
 dnl The SEARCH_LIBS are a white-space separated list or empty.
-dnl The OTHER_LIBS may be empty or a list of depency libraries.
+dnl The OTHER_LIBS may be empty or a list of dependency libraries.
 dnl
 dnl This macro is modified from AC_SEARCH_LIBS.  In particular,
 dnl we use a separate cache variable ac_cv_sc_search_FUNCTION.
@@ -175,7 +175,8 @@ AC_DEFUN([SC_CHECK_MATH],
 [[
 /* make this so complex that the compiler cannot predict the result */
 double a = 3.14149;
-for (; sqrt (a) < a; a *= 1.000023) { putc ('1', stdout); }
+double (*volatile fp)(double) = sqrt;
+for (; fp (a) < a; a *= 1.000023) { putc ('1', stdout); }
 ]], [m],
   [AC_DEFINE([HAVE_MATH], [1], [Define to 1 if sqrt links successfully])],
   [AC_MSG_ERROR([unable to link with sqrt, cos, sin, both as is and with -lm])])
@@ -398,7 +399,7 @@ dnl              [lua_createtable], [LUA], [$1])
 dnl SC_CHECK_BLAS_LAPACK([$1])
 SC_BUILTIN_ALL_PREFIX([$1])
 SC_CHECK_PTHREAD([$1])
-SC_CHECK_OPENMP([$1])
+dnl SC_CHECK_OPENMP([$1])
 SC_CHECK_MEMALIGN([$1])
 SC_CHECK_QSORT_R([$1])
 SC_CHECK_V4L2([$1])

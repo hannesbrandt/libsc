@@ -609,6 +609,16 @@ sc_MPI_Isend (void *buf, int count, sc_MPI_Datatype datatype, int dest,
 }
 
 int
+sc_MPI_Sendrecv (const void *sendbuf, int sendcount, sc_MPI_Datatype sendtype,
+                 int dest, int sendtag,
+                 void *recvbuf, int recvcount, sc_MPI_Datatype recvtype,
+                 int source, int recvtag, sc_MPI_Comm comm, sc_MPI_Status * status)
+{
+  SC_ABORT ("non-MPI MPI_Sendrecv is not implemented");
+  return sc_MPI_SUCCESS;
+}
+
+int
 sc_MPI_Probe (int source, int tag, sc_MPI_Comm comm, sc_MPI_Status *status)
 {
   SC_ABORT ("non-MPI MPI_Probe is not implemented");
@@ -807,6 +817,24 @@ sc_MPI_Testall (int count, sc_MPI_Request *array_of_requests, int *flag,
                     "non-MPI MPI_Testall handles NULL requests only");
   }
   return sc_MPI_SUCCESS;
+#endif
+}
+
+int
+sc_MPI_Comm_split_type (sc_MPI_Comm mpicomm, int split_type, int key,
+                        sc_MPI_Info info, sc_MPI_Comm *newcomm)
+{
+#if defined SC_ENABLE_MPI && defined SC_ENABLE_MPICOMMSHARED
+  return MPI_Comm_split_type (mpicomm, split_type, key, info, newcomm);
+#else
+  /* split communicator into single processes */
+  int                 mpiret;
+  int                 mpirank;
+
+  if ((mpiret = sc_MPI_Comm_rank (mpicomm, &mpirank)) != sc_MPI_SUCCESS) {
+    return mpiret;
+  }
+  return sc_MPI_Comm_split (mpicomm, mpirank, mpirank, newcomm);
 #endif
 }
 

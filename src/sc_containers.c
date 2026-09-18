@@ -380,7 +380,10 @@ sc_array_is_equal (sc_array_t * array, sc_array_t * other)
 void
 sc_array_uniq (sc_array_t * array, int (*compar) (const void *, const void *))
 {
-  size_t              incount, dupcount;
+  size_t              incount;
+#ifdef SC_ENABLE_DEBUG
+  size_t              dupcount;
+#endif
   size_t              i, j;
   void               *elem1, *elem2, *temp;
 
@@ -391,14 +394,18 @@ sc_array_uniq (sc_array_t * array, int (*compar) (const void *, const void *))
     return;
   }
 
+#ifdef SC_ENABLE_DEBUG
   dupcount = 0;                 /* count duplicates */
+#endif
   i = 0;                        /* read counter */
   j = 0;                        /* write counter */
   elem1 = sc_array_index (array, 0);
   while (i < incount) {
     elem2 = ((i < incount - 1) ? sc_array_index (array, i + 1) : NULL);
     if (i < incount - 1 && compar (elem1, elem2) == 0) {
+#ifdef SC_ENABLE_DEBUG
       ++dupcount;
+#endif
       ++i;
     }
     else {
@@ -653,114 +660,131 @@ sc_array_checksum (sc_array_t * array)
 }
 
 size_t
-sc_array_pqueue_add (sc_array_t * array, void *temp,
-                     int (*compar) (const void *, const void *))
+sc_array_pqueue_siftup (sc_array_t * array, size_t pos, void *newval,
+                        int (*compar) (const void *, const void *))
 {
-  int                 comp;
-  size_t              parent, child, swaps;
-  const size_t        size = array->elem_size;
-  void               *p, *c;
+  size_t              esize;
+  size_t              swaps;
+  size_t              parent;
+  void               *Hparent;
 
-  /* this works on a pre-allocated array that is not a view */
+  SC_ASSERT (array != NULL);
   SC_ASSERT (SC_ARRAY_IS_OWNER (array));
-  SC_ASSERT (array->elem_count > 0);
+  SC_ASSERT (pos < array->elem_count);
+  SC_ASSERT (newval != NULL);
+  SC_ASSERT (compar != NULL);
 
-  /* PQUEUE FUNCTIONS ARE UNTESTED AND CURRENTLY DISABLED. */
-  SC_ABORT_NOT_REACHED ();
-
+  esize = array->elem_size;
   swaps = 0;
-  child = array->elem_count - 1;
-  c = array->array + (size * child);
-  while (child > 0) {
-    parent = (child - 1) / 2;
-    p = array->array + (size * parent);
-
-    /* compare child to parent */
-    comp = compar (p, c);
-    if (comp <= 0) {
-      break;
+  while (pos > 0) {
+    parent = (pos - 1) >> 1;
+    Hparent = sc_array_index (array, parent);
+    if (compar (newval, Hparent) > 0) {
+      memcpy (sc_array_index (array, pos), Hparent, esize);
+      pos = parent;
+      ++swaps;
     }
-
-    /* swap child and parent */
-    memcpy (temp, c, size);
-    memcpy (c, p, size);
-    memcpy (p, temp, size);
-    ++swaps;
-
-    /* walk up the tree */
-    child = parent;
-    c = p;
+    else
+      break;
   }
-
+  memcpy (sc_array_index (array, pos), newval, esize);
   return swaps;
 }
 
 size_t
-sc_array_pqueue_pop (sc_array_t * array, void *result,
+sc_array_pqueue_insert (sc_array_t * array, void *newval,
+                        int (*compar) (const void *, const void *))
+{
+  size_t              snn;
+
+  SC_ASSERT (array != NULL);
+  SC_ASSERT (SC_ARRAY_IS_OWNER (array));
+  SC_ASSERT (newval != NULL);
+  SC_ASSERT (compar != NULL);
+
+  snn = array->elem_count;
+  sc_array_push (array);
+  return sc_array_pqueue_siftup (array, snn, newval, compar);
+}
+
+size_t
+sc_array_pqueue_siftdown (sc_array_t * array, size_t snn,
+                          size_t pos, void *newval,
+                          int (*compar) (const void *, const void *))
+{
+  size_t              esize;
+  size_t              swaps;
+  size_t              child, child2;
+  void               *Hchild, *Hchild2;
+
+  SC_ASSERT (array != NULL);
+  SC_ASSERT (SC_ARRAY_IS_OWNER (array));
+  SC_ASSERT (snn <= array->elem_count);
+  SC_ASSERT (pos < snn);
+  SC_ASSERT (newval != NULL);
+  SC_ASSERT (compar != NULL);
+
+  esize = array->elem_size;
+  swaps = 0;
+  for (;;) {
+    child = (pos << 1) + 1;
+    if (child < snn) {
+      Hchild = sc_array_index (array, child);
+      child2 = child + 1;
+      if (child2 < snn) {
+        Hchild2 = sc_array_index (array, child2);
+        if (compar (Hchild, Hchild2) <= 0) {
+          child = child2;
+          Hchild = Hchild2;
+        }
+      }
+      if (compar (newval, Hchild) < 0) {
+        memcpy (sc_array_index (array, pos), Hchild, esize);
+        pos = child;
+        ++swaps;
+      }
+      else
+        break;
+    }
+    else
+      break;
+  }
+  memcpy (sc_array_index (array, pos), newval, esize);
+  return swaps;
+}
+
+size_t
+sc_array_pqueue_pop (sc_array_t * array, void *newval,
                      int (*compar) (const void *, const void *))
 {
-  int                 comp;
-  size_t              new_count, swaps;
-  size_t              parent, child, child1;
-  const size_t        size = array->elem_size;
-  void               *p, *c, *c1;
-  void               *temp;
+  size_t              esize;
+  size_t              snn;
+  size_t              swaps;
 
-  /* array must not be empty or a view */
+  SC_ASSERT (array != NULL);
   SC_ASSERT (SC_ARRAY_IS_OWNER (array));
   SC_ASSERT (array->elem_count > 0);
+  SC_ASSERT (newval != NULL);
+  SC_ASSERT (compar != NULL);
 
-  /* PQUEUE FUNCTIONS ARE UNTESTED AND CURRENTLY DISABLED. */
-  SC_ABORT_NOT_REACHED ();
-
+  esize = array->elem_size;
+  snn = array->elem_count;
   swaps = 0;
-  new_count = array->elem_count - 1;
 
-  /* extract root */
-  parent = 0;
-  p = array->array + (size * parent);
-  memcpy (result, p, size);
-
-  /* copy the last element to the top and reuse it as temp storage */
-  temp = array->array + (size * new_count);
-  if (new_count > 0) {
-    memcpy (p, temp, size);
+  /* remove root from heap */
+  memcpy (newval, sc_array_index (array, 0), esize);
+  if (snn == 1) {
+    sc_array_resize (array, 0);
   }
+  else {
+    /* move last leaf to root and sift down */
+    --snn;
+    swaps = sc_array_pqueue_siftdown
+      (array, snn, 0, sc_array_index (array, snn), compar);
 
-  /* sift down the tree */
-  while ((child = 2 * parent + 1) < new_count) {
-    c = array->array + (size * child);
-
-    /* check if child has a sibling and use that one if it is smaller */
-    if ((child1 = 2 * parent + 2) < new_count) {
-      c1 = array->array + (size * child1);
-      comp = compar (c, c1);
-      if (comp > 0) {
-        child = child1;
-        c = c1;
-      }
-    }
-
-    /* sift down the parent if it is larger */
-    comp = compar (p, c);
-    if (comp <= 0) {
-      break;
-    }
-
-    /* swap child and parent */
-    memcpy (temp, c, size);
-    memcpy (c, p, size);
-    memcpy (p, temp, size);
-    ++swaps;
-
-    /* walk down the tree */
-    parent = child;
-    p = c;
+    /* circumvent calling sc_array_pop */
+    array->elem_count = snn;
   }
-
-  /* we can resize down here only since we need the temp element above */
-  sc_array_resize (array, new_count);
-
   return swaps;
 }
 
@@ -1197,7 +1221,10 @@ static void
 sc_hash_maybe_resize (sc_hash_t * hash)
 {
   size_t              i, j;
-  size_t              new_size, new_count;
+  size_t              new_size;
+#ifdef SC_ENABLE_DEBUG
+  size_t              new_count;
+#endif
   sc_list_t          *old_list, *new_list;
   sc_link_t          *lynk, *temp;
   sc_array_t         *new_slots;
@@ -1229,7 +1256,9 @@ sc_hash_maybe_resize (sc_hash_t * hash)
   }
 
   /* go through the old slots and move data to the new slots */
+#ifdef SC_ENABLE_DEBUG
   new_count = 0;
+#endif
   for (i = 0; i < old_slots->elem_count; ++i) {
     old_list = (sc_list_t *) sc_array_index (old_slots, i);
     lynk = old_list->first;
@@ -1238,7 +1267,9 @@ sc_hash_maybe_resize (sc_hash_t * hash)
       j = hash->hash_fn (lynk->data, hash->user_data) % new_size;
       new_list = (sc_list_t *) sc_array_index (new_slots, j);
       (void) sc_list_prepend (new_list, lynk->data);
+#ifdef SC_ENABLE_DEBUG
       ++new_count;
+#endif
 
       /* remove old list element */
       temp = lynk->next;
@@ -1324,7 +1355,9 @@ void
 sc_hash_truncate (sc_hash_t * hash)
 {
   size_t              i;
+#ifdef SC_ENABLE_DEBUG
   size_t              count;
+#endif
   sc_list_t          *list;
   sc_array_t         *slots = hash->slots;
 
@@ -1339,9 +1372,14 @@ sc_hash_truncate (sc_hash_t * hash)
   }
 
   /* return all list elements to the outside memory allocator */
-  for (i = 0, count = 0; i < slots->elem_count; ++i) {
+#ifdef SC_ENABLE_DEBUG
+  count = 0;
+#endif
+  for (i = 0; i < slots->elem_count; ++i) {
     list = (sc_list_t *) sc_array_index (slots, i);
+#ifdef SC_ENABLE_DEBUG
     count += list->elem_count;
+#endif
     sc_list_reset (list);
   }
   SC_ASSERT (count == hash->elem_count);
@@ -1352,13 +1390,21 @@ sc_hash_truncate (sc_hash_t * hash)
 void
 sc_hash_unlink (sc_hash_t * hash)
 {
-  size_t              i, count;
+  size_t              i;
+#ifdef SC_ENABLE_DEBUG
+  size_t              count;
+#endif
   sc_list_t          *list;
   sc_array_t         *slots = hash->slots;
 
-  for (i = 0, count = 0; i < slots->elem_count; ++i) {
+#ifdef SC_ENABLE_DEBUG
+  count = 0;
+#endif
+  for (i = 0; i < slots->elem_count; ++i) {
     list = (sc_list_t *) sc_array_index (slots, i);
+#ifdef SC_ENABLE_DEBUG
     count += list->elem_count;
+#endif
     sc_list_unlink (list);
   }
   SC_ASSERT (count == hash->elem_count);
@@ -1784,3 +1830,19 @@ sc_recycle_array_remove (sc_recycle_array_t * rec_array, size_t position)
 
   return sc_array_index (&rec_array->a, position);
 }
+
+/* definitions for inline functions */
+
+void               *sc_array_index (sc_array_t * array, size_t iz);
+void               *sc_array_index_null (sc_array_t * array, size_t iz);
+void               *sc_array_index_int (sc_array_t * array, int i);
+void               *sc_array_index_long (sc_array_t * array, long l);
+void               *sc_array_index_ssize_t (sc_array_t * array, ssize_t is);
+void               *sc_array_index_int16 (sc_array_t * array, int16_t i16);
+size_t              sc_array_position (sc_array_t * array, void *element);
+void               *sc_array_pop (sc_array_t * array);
+void               *sc_array_push_count (sc_array_t * array,
+                                         size_t add_count);
+void               *sc_array_push (sc_array_t * array);
+void               *sc_mempool_alloc (sc_mempool_t * mempool);
+void                sc_mempool_free (sc_mempool_t * mempool, void *elem);

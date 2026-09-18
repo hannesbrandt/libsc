@@ -111,7 +111,8 @@ typedef int         (*sc_hash_foreach_t) (void **v, const void *u);
  * \ref sc_array_resize and \ref sc_array_rewind.
  * Elements can be sorted with \ref sc_array_sort.
  * If the array is sorted, it can be searched with \ref sc_array_bsearch.
- * A priority queue is implemented with pqueue_add and pqueue_pop (untested).
+ * A maximum-first priority queue is implemented with \ref
+ * sc_array_pqueue_insert, \ref sc_array_pqueue_pop and further helpers.
  */
 typedef struct sc_array
 {
@@ -452,47 +453,82 @@ void                sc_array_permute (sc_array_t * array,
  */
 unsigned int        sc_array_checksum (sc_array_t * array);
 
-/** Adds an element to a priority queue.
- * \note PQUEUE FUNCTIONS ARE UNTESTED AND CURRENTLY DISABLED.
+/** Replace an element in a priority queue with another and sift up.
+ * The priority queue is implemented as a binary heap in descending order.
+ * It is a maximum heap: The largest values have highest priority.
+ * The new element is inserted at a given position and must not
+ * be less than the descendants below that position.
  * This function is not allowed for views.
- * The priority queue is implemented as a heap in ascending order.
- * A heap is a binary tree where the children are not less than their parent.
- * Assumes that elements [0]..[elem_count-2] form a valid heap.
- * Then propagates [elem_count-1] upward by swapping if necessary.
- * \param [in,out] array    Valid priority queue object.
- * \param [in] temp    Pointer to unused allocated memory of elem_size.
- * \param [in] compar  The comparison function to be used.
- * \return Returns the number of swap operations.
- * \note  If the return value is zero for all elements in an array,
- *        the array is sorted linearly and unchanged.
+ * \param [in,out] array    Valid priority queue, not a view.
+ * \param [in] pos          Valid position in priority queue.
+ * \param [in] newval       Read-only storage of the new value.
+ *                          Must reside outside of the array.
+ * \param [in] compar       A comparison function to be used.
+ * \return                  The number of swap operations.
  */
-size_t              sc_array_pqueue_add (sc_array_t * array,
-                                         void *temp,
-                                         int (*compar) (const void *,
-                                                        const void *));
+size_t              sc_array_pqueue_siftup (sc_array_t * array,
+                                            size_t pos, void *newval,
+                                            int (*compar) (const void *,
+                                                           const void *));
 
-/** Pops the smallest element from a priority queue.
- * \note PQUEUE FUNCTIONS ARE UNTESTED AND CURRENTLY DISABLED.
+/** Add an element to a priority queue.
+ * The priority queue is implemented as a heap in descending order.
+ * It is a maximum heap: The largest values have highest priority.
+ * This function augments the priority queue by one element.
  * This function is not allowed for views.
- * This function assumes that the array forms a valid heap in ascending order.
- * \param [in,out] array    Valid priority queue object.
- * \param [out] result  Pointer to unused allocated memory of elem_size.
- * \param [in]  compar  The comparison function to be used.
- * \return Returns the number of swap operations.
- * \note This function resizes the array to elem_count-1.
+ * \param [in,out] array    Valid priority queue, not a view.
+ *                          Enlarged by one element.
+ * \param [in] newval       Read-only storage of the new value.
+ * \param [in] compar       A comparison function to be used.
+ * \return                  The number of swap operations.
+ */
+size_t              sc_array_pqueue_insert (sc_array_t * array, void *newval,
+                                            int (*compar) (const void *,
+                                                           const void *));
+
+/** Replace an element in a priority queue with another and sift down.
+ * The priority queue is implemented as a binary heap in descending order.
+ * It is a maximum heap: The largest values have highest priority.
+ * The new element is inserted at a given position and must not be greater
+ * than its ancestors above that position.
+ * This function is not allowed for views.
+ * \param [in,out] array    Valid priority queue, not a view.
+ * \param [in] maxcount     Less or equal than \a array's element count.
+ *                          Work only with this amount of array elements.
+ * \param [in] pos          Valid position less than \a maxcount.
+ * \param [in] newval       Read-only storage of the new value.  Must reside
+ *                          outside of the first maxcount array positions.
+ * \param [in] compar       A comparison function to be used.
+ * \return                  The number of swap operations.
+ */
+size_t              sc_array_pqueue_siftdown (sc_array_t * array,
+                                              size_t maxcount,
+                                              size_t pos, void *newval,
+                                              int (*compar) (const void *,
+                                                             const void *));
+
+/** Pop the largest element from a priority queue.
+ * The priority queue is implemented as a binary heap in descending order.
+ * It is a maximum heap: The largest values have highest priority.
+ * The root of the heap is removed and returned.
+ * This function is not allowed for views.
+ * \param [in,out] array    Valid priority queue, not a view.
+ *                          Shrunk by one element.
+ * \param [in] newval       Storage for the maximum value removed.
+ * \param [in] compar       A comparison function to be used.
+ * \return                  The number of swap operations.
  */
 size_t              sc_array_pqueue_pop (sc_array_t * array,
-                                         void *result,
+                                         void *newval,
                                          int (*compar) (const void *,
                                                         const void *));
 
 /** Returns a pointer to an array element.
  * \param [in] array Valid array.
- * \param [in] index needs to be in [0]..[elem_count-1].
+ * \param [in] iz    Needs to be in [0]..[elem_count-1].
  * \return           Pointer to the indexed array element.
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_array_index (sc_array_t * array, size_t iz)
 {
   SC_ASSERT (iz < array->elem_count);
@@ -502,12 +538,11 @@ sc_array_index (sc_array_t * array, size_t iz)
 
 /** Returns a pointer to an array element or NULL at the array's end.
  * \param [in] array Valid array.
- * \param [in] index needs to be in [0]..[elem_count].
+ * \param [in] iz    Needs to be in [0]..[elem_count].
  * \return           Pointer to the indexed array element or
  *                   NULL if the specified index is elem_count.
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_array_index_null (sc_array_t * array, size_t iz)
 {
   SC_ASSERT (iz <= array->elem_count);
@@ -517,10 +552,10 @@ sc_array_index_null (sc_array_t * array, size_t iz)
 }
 
 /** Returns a pointer to an array element indexed by a plain int.
- * \param [in] index needs to be in [0]..[elem_count-1].
+ * \param [in] array Valid array.
+ * \param [in] i     Needs to be in [0]..[elem_count-1].
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_array_index_int (sc_array_t * array, int i)
 {
   SC_ASSERT (i >= 0 && (size_t) i < array->elem_count);
@@ -529,10 +564,10 @@ sc_array_index_int (sc_array_t * array, int i)
 }
 
 /** Returns a pointer to an array element indexed by a plain long.
- * \param [in] index needs to be in [0]..[elem_count-1].
+ * \param [in] array Valid array.
+ * \param [in] l     Needs to be in [0]..[elem_count-1].
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_array_index_long (sc_array_t * array, long l)
 {
   SC_ASSERT (l >= 0 && (size_t) l < array->elem_count);
@@ -541,10 +576,10 @@ sc_array_index_long (sc_array_t * array, long l)
 }
 
 /** Returns a pointer to an array element indexed by a ssize_t.
- * \param [in] index needs to be in [0]..[elem_count-1].
+ * \param [in] array Valid array.
+ * \param [in] is    Needs to be in [0]..[elem_count-1].
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_array_index_ssize_t (sc_array_t * array, ssize_t is)
 {
   SC_ASSERT (is >= 0 && (size_t) is < array->elem_count);
@@ -553,10 +588,10 @@ sc_array_index_ssize_t (sc_array_t * array, ssize_t is)
 }
 
 /** Returns a pointer to an array element indexed by a int16_t.
- * \param [in] index needs to be in [0]..[elem_count-1].
+ * \param [in] array Valid array.
+ * \param [in] i16   Needs to be in [0]..[elem_count-1].
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_array_index_int16 (sc_array_t * array, int16_t i16)
 {
   SC_ASSERT (i16 >= 0 && (size_t) i16 < array->elem_count);
@@ -565,10 +600,10 @@ sc_array_index_int16 (sc_array_t * array, int16_t i16)
 }
 
 /** Return the index of an object in an array identified by a pointer.
- * \param [in] element needs to be the address of an element in array.
+ * \param [in] array   Valid array.
+ * \param [in] element Needs to be the address of an element in \b array.
  */
-/*@unused@*/
-static inline size_t
+inline size_t
 sc_array_position (sc_array_t * array, void *element)
 {
   ptrdiff_t           position;
@@ -588,8 +623,7 @@ sc_array_position (sc_array_t * array, void *element)
  * \return                The pointer to the removed object.  Will be valid
  *                        as long as no other function is called on this array.
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_array_pop (sc_array_t * array)
 {
   SC_ASSERT (SC_ARRAY_IS_OWNER (array));
@@ -602,8 +636,7 @@ sc_array_pop (sc_array_t * array)
  * This function is not allowed for views.
  * \return Returns a pointer to the uninitialized newly added elements.
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_array_push_count (sc_array_t * array, size_t add_count)
 {
   const size_t        old_count = array->elem_count;
@@ -625,8 +658,7 @@ sc_array_push_count (sc_array_t * array, size_t add_count)
  * This function is not allowed for views.
  * \return Returns a pointer to the uninitialized newly added element.
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_array_push (sc_array_t * array)
 {
   return sc_array_push_count (array, 1);
@@ -780,8 +812,7 @@ void                sc_mempool_truncate (sc_mempool_t * mempool);
  * Elements previously returned to the pool are recycled.
  * \return Returns a new or recycled element pointer.
  */
-/*@unused@*/
-static inline void *
+inline void        *
 sc_mempool_alloc (sc_mempool_t * mempool)
 {
   void               *ret;
@@ -809,10 +840,10 @@ sc_mempool_alloc (sc_mempool_t * mempool)
 }
 
 /** Return a previously allocated element to the pool.
- * \param [in] elem  The element to be returned to the pool.
+ * \param [in,out] mempool  Valid memory pool.
+ * \param [in] elem         The element to be returned to the pool.
  */
-/*@unused@*/
-static inline void
+inline void
 sc_mempool_free (sc_mempool_t * mempool, void *elem)
 {
   sc_array_t         *freed = &mempool->freed;

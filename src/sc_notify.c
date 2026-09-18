@@ -898,7 +898,6 @@ sc_notify_reset_output (sc_array_t * output, int *senders, int *num_senders,
     npay = 0;
   }
   multi = 1 + npay;
-  SC_ASSERT (payload == NULL || (int) payload->elem_count == 0);
 
   found_num_senders = 0;
   if (output->elem_count > 0) {
@@ -1210,7 +1209,10 @@ sc_notify_recursive_nary (const sc_notify_nary_t * nary, int level,
   int                 lengthn;
   int                 mypart, topart, hipart;
   int                 remaining;
-  int                 nsent, nrecv;
+#ifdef SC_ENABLE_DEBUG
+  int                 nsent;
+#endif
+  int                 nrecv;
   int                 expon, power;
   int                 itemlen;
   sc_array_t          sendbufs, recvbufs;
@@ -1273,7 +1275,9 @@ sc_notify_recursive_nary (const sc_notify_nary_t * nary, int level,
     sc_array_init_count (&recvbufs, sizeof (sc_array_t), nrecv + 1);
 
     /* prepare send buffers */
+#ifdef SC_ENABLE_DEBUG
     nsent = 0;
+#endif
     sc_array_init_count (&sendbufs, sizeof (sc_array_t), divn);
     sc_array_init_count (&sendreqs, sizeof (sc_MPI_Request), divn);
     for (j = 0; j < divn; ++j) {
@@ -1305,7 +1309,9 @@ sc_notify_recursive_nary (const sc_notify_nary_t * nary, int level,
         continue;
       }
 
+#ifdef SC_ENABLE_DEBUG
       ++nsent;
+#endif
     }
     SC_ASSERT (nsent < divn);
 
@@ -1493,6 +1499,12 @@ sc_notify_payload_nary (sc_array_t * receivers, sc_array_t * senders,
       if (senders != NULL) {
         *(int *) sc_array_push (senders) = 0;
       }
+    }
+    if (out_payload != NULL) {
+      /* if out_payload is defined, copy single entry from in_payload */
+      SC_ASSERT (in_payload != NULL && in_payload->elem_count == 1);
+      SC_ASSERT (in_payload->elem_size == out_payload->elem_size);
+      sc_array_copy (out_payload, in_payload);
     }
 
     /* we return if there is only one process */
