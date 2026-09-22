@@ -23,6 +23,7 @@
 
 #include <sc.h>
 
+#ifdef SC_ENABLE_MPI
 static void
 sc_test_wrap_non_blocking (sc_MPI_Comm mpicomm)
 {
@@ -83,6 +84,7 @@ sc_test_wrap_non_blocking (sc_MPI_Comm mpicomm)
     SC_FREE (recv_buf);
   }
 }
+#endif
 
 int
 main (int argc, char **argv)

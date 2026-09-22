@@ -44,7 +44,7 @@ sc_MPI_Aint_diff (sc_MPI_Aint a, sc_MPI_Aint b)
 }
 #endif
 
-/* TODO: Add ifdef */
+#ifdef SC_HAVE_AINT_DIFF
 static void
 sc_create_custom_datatype (size_t count, MPI_Datatype *custom)
 {
@@ -129,6 +129,7 @@ sc_create_custom_datatype (size_t count, MPI_Datatype *custom)
     *custom = multiple_longs;
   }
 }
+#endif
 
 int
 sc_wrap_Isend (const void *buf, size_t count, sc_MPI_Datatype datatype,
@@ -162,12 +163,13 @@ sc_wrap_Isend (const void *buf, size_t count, sc_MPI_Datatype datatype,
   }
   else {
     /* it is safe to cast the count to an int */
-    return sc_MPI_Isend (buf, (int) count, datatype, dest, tag, comm,
+    return sc_MPI_Isend ((void *) buf, (int) count, datatype, dest, tag, comm,
                          request);
   }
 #else
   /* this may cause an MPI_ERR_COUNT; code behaves as without the wrapper */
-  return sc_MPI_Isend (buf, (int) count, datatype, dest, tag, comm, request);
+  return sc_MPI_Isend ((void *) buf, (int) count, datatype, dest, tag, comm,
+                       request);
 #endif
 }
 
