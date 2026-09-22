@@ -45,6 +45,7 @@ sc_test_wrap_non_blocking (sc_MPI_Comm mpicomm)
 
   /* create dummy data that exceeds INT_MAX as byte count */
   data = SC_ALLOC (char, count);
+  recv_buf = NULL;
   if (mpirank == 1) {
     recv_buf = SC_ALLOC (char, count);
   }
