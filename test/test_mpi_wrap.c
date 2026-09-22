@@ -26,11 +26,11 @@
 static void
 sc_test_wrap_non_blocking (sc_MPI_Comm mpicomm)
 {
-  char *data, *recv_buf;
-  size_t si;
-  size_t count = (size_t) INT_MAX + 1;
-  int mpiret, mpisize, mpirank;
-  sc_MPI_Request req_send, req_recv;
+  char               *data, *recv_buf;
+  size_t              si;
+  size_t              count = (size_t) INT_MAX + 1;
+  int                 mpiret, mpisize, mpirank;
+  sc_MPI_Request      req_send, req_recv;
 
   mpiret = sc_MPI_Comm_size (mpicomm, &mpisize);
   SC_CHECK_MPI (mpiret);
@@ -57,22 +57,23 @@ sc_test_wrap_non_blocking (sc_MPI_Comm mpicomm)
 
   /* use wrapper to ship the data */
   if (mpirank == 0) {
-    mpiret = sc_wrap_Isend (data, count, sc_MPI_BYTE, 1, 0, mpicomm, &req_send);
+    mpiret =
+      sc_wrap_Isend (data, count, sc_MPI_BYTE, 1, 0, mpicomm, &req_send);
     SC_CHECK_MPI (mpiret);
     mpiret = sc_MPI_Wait (&req_send, sc_MPI_STATUS_IGNORE);
     SC_CHECK_MPI (mpiret);
   }
 
   if (mpirank == 1) {
-    mpiret = sc_wrap_Irecv (recv_buf, count, sc_MPI_BYTE, 0, 0, mpicomm, &req_recv);
+    mpiret =
+      sc_wrap_Irecv (recv_buf, count, sc_MPI_BYTE, 0, 0, mpicomm, &req_recv);
     SC_CHECK_MPI (mpiret);
     mpiret = sc_MPI_Wait (&req_recv, sc_MPI_STATUS_IGNORE);
     SC_CHECK_MPI (mpiret);
   }
 
-  
   if (mpirank == 1) {
-  /* check the received data */
+    /* check the received data */
     SC_CHECK_ABORT (!memcmp (data, recv_buf, count), "Data mismatch");
   }
 
