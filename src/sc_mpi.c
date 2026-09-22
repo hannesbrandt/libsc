@@ -49,7 +49,10 @@ static void
 sc_create_custom_datatype (size_t count, MPI_Datatype *custom)
 {
   int                 mpiret;
-  int                 long_size;
+#ifdef SC_ENABLE_DEBUG
+  int                 mpi_long_size;
+#endif
+  size_t              long_size;
   size_t              num_longs, rest;
   MPI_Datatype        multiple_longs, rest_bytes;
 
@@ -57,15 +60,21 @@ sc_create_custom_datatype (size_t count, MPI_Datatype *custom)
   SC_ASSERT (count > INT_MAX);
 
   /* get size of a long */
-  mpiret = MPI_Type_size (sc_MPI_LONG, &long_size);
+  long_size = sizeof (long);
+#ifdef SC_ENABLE_DEBUG
+  mpiret = MPI_Type_size (MPI_LONG, &mpi_long_size);
   SC_CHECK_MPI (mpiret);
-  SC_ASSERT (long_size == sizeof (long));
+  SC_ASSERT (mpi_long_size == sizeof (long));
+#endif
 
-  num_longs = count / ((size_t) long_size);
-  rest = count % ((size_t) long_size);
+  num_longs = count / (long_size);
+  rest = count % (long_size);
 
   /* INT_MAX should be more than sizeof (long) on all systems */
   SC_ASSERT (num_longs > 0);
+
+  /* MPI_Type_contiguous can only be invoked for integer counts */
+  SC_ASSERT (num_longs < INT_MAX);
 
   /* create a custom MPI datatype consisting of longs */
   /* this call can throw an MPI_ERR_COUNT if num_longs can not be stored in an int */
@@ -96,7 +105,7 @@ sc_create_custom_datatype (size_t count, MPI_Datatype *custom)
     /* displacements in bytes */
     displacements[0] = 0;
     /* MPI_Aint is expected to larger than int */
-    displacements[1] = num_longs * (size_t) long_size;
+    displacements[1] = num_longs * long_size;
 
     /* set the types that form the new type */
     types[0] = multiple_longs;
@@ -133,6 +142,11 @@ sc_wrap_Isend (const void *buf, size_t count, sc_MPI_Datatype datatype,
     int                 mpiret, retval;
     MPI_Datatype        custom;
 
+    /* check if the custom datatype can deal with this message size */
+    SC_CHECK_ABORTF (count <= INT_MAX * sizeof (long),
+                     "Message size of %ld bytes exceeds limit of %ld.\n",
+                     count, INT_MAX * sizeof (long));
+
     /* create a custom MPI datatype to reduce the count parameter */
     sc_create_custom_datatype (count, &custom);
 
@@ -168,6 +182,11 @@ sc_wrap_Irecv (void *buf, size_t count, sc_MPI_Datatype datatype,
   if (count > INT_MAX) {
     int                 mpiret, retval;
     MPI_Datatype        custom;
+
+    /* check if the custom datatype can deal with this message size */
+    SC_CHECK_ABORTF (count <= INT_MAX * sizeof (long),
+                     "Message size of %ld bytes exceeds limit of %ld.\n",
+                     count, INT_MAX * sizeof (long));
 
     /* create a custom MPI datatype to reduce the count parameter */
     sc_create_custom_datatype (count, &custom);
