@@ -23,7 +23,7 @@
 
 #include <sc.h>
 
-#ifdef SC_ENABLE_MPI
+#if (defined SC_ENABLE_MPI) && (MPI_VERSION >= 2)
 static void
 sc_test_wrap_non_blocking (sc_MPI_Comm mpicomm)
 {
@@ -96,7 +96,7 @@ main (int argc, char **argv)
   SC_CHECK_MPI (mpiret);
   sc_init (mpicomm, 1, 1, NULL, SC_LP_INFO);
 
-#ifdef SC_ENABLE_MPI
+#if (defined SC_ENABLE_MPI) && (MPI_VERSION >= 2)
   sc_test_wrap_non_blocking (mpicomm);
 #endif
 
