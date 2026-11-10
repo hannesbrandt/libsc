@@ -39,12 +39,17 @@ main (int argc, char **argv)
   double             *ddata2;
   double              elapsed_allgather;
   double              elapsed_replacement;
-
+  sleep (2);
+  SC_PRODUCTION ("Entering sc_MPI_init.\n");
   mpiret = sc_MPI_Init (&argc, &argv);
   SC_CHECK_MPI (mpiret);
   mpicomm = sc_MPI_COMM_WORLD;
+  sleep (2);
+  SC_PRODUCTION ("Entering sc_MPI_Comm_size.\n");
   mpiret = sc_MPI_Comm_size (mpicomm, &mpisize);
   SC_CHECK_MPI (mpiret);
+  sleep (2);
+  SC_PRODUCTION ("Entering sc_MPI_Comm_rank.\n");
   mpiret = sc_MPI_Comm_rank (mpicomm, &mpirank);
   SC_CHECK_MPI (mpiret);
 
