@@ -48,6 +48,8 @@ main (int argc, char **argv)
   mpiret = sc_MPI_Comm_rank (mpicomm, &mpirank);
   SC_CHECK_MPI (mpiret);
 
+  sleep (2);
+  SC_PRODUCTION ("Entering sc_init.\n");
   sc_init (mpicomm, 1, 1, NULL, SC_LP_DEFAULT);
 
   idata = SC_ALLOC (int, mpisize);
