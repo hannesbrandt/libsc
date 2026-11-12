@@ -134,7 +134,7 @@ if test "x$enableval" = xyes ; then
   else
     AC_DEFINE([ENABLE_VALGRIND], 1, [Enable valgrind in executing tests])
   fi
-  $1_VALGRIND_FLAGS="--error-exitcode=1"
+  $1_VALGRIND_FLAGS="--error-exitcode=1 --suppressions=$srcdir/openmpi-valgrind.supp"
 fi
 dnl We are not making $1_VALGRIND a precious variable for simplicity
 dnl AC_ARG_VAR([$1_VALGRIND], [valgrind wrapper to invoke for tests on make check])
