@@ -29,7 +29,7 @@ jobs:
       run: |
         sudo apt-get update -yq
         sudo apt-get install -yq --no-install-recommends \
-            zlib1g-dev libmpich-dev mpich
+            zlib1g-dev libopenmpi-dev openmpi-bin
 
     - name: Checkout source code
       uses: actions/checkout@main
@@ -113,7 +113,7 @@ jobs:
       run: |
         sudo apt-get update -yq
         sudo apt-get install -yq --no-install-recommends \
-            zlib1g-dev libmpich-dev mpich valgrind
+            zlib1g-dev libopenmpi-dev openmpi-bin valgrind
 
     - name: Checkout source code
       uses: actions/checkout@main
@@ -151,7 +151,7 @@ jobs:
       run: |
         sudo apt-get update -yq
         sudo apt-get install -yq --no-install-recommends \
-            zlib1g-dev libmpich-dev mpich
+            zlib1g-dev libopenmpi-dev openmpi-bin
 
     - name: Checkout source code
       uses: actions/checkout@main
