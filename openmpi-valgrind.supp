@@ -24,6 +24,12 @@
 #
 ###############################################################
 
+{
+   test_file
+   Memcheck:Param
+   ...
+}
+
 # weirdness in init routines on Gentoo
 {
   linux_pthread_init
