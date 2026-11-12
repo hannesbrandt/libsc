@@ -25,9 +25,17 @@
 ###############################################################
 
 {
-   test_file
+   test_generated_suppression
    Memcheck:Param
-   ...
+   writev(vector[1])
+   fun:__writev
+   fun:writev
+   fun:pmix_ptl_base_send_handler
+   obj:/usr/lib/x86_64-linux-gnu/libevent_core-2.1.so.7.0.1
+   fun:event_base_loop
+   obj:/usr/lib/x86_64-linux-gnu/pmix2/lib/libpmix.so.2.13.1
+   fun:start_thread
+   fun:clone
 }
 
 # weirdness in init routines on Gentoo
