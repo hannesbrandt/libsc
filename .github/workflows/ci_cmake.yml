@@ -55,7 +55,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install --no-install-recommends \
-            libopenmpi-dev openmpi
+            libopenmpi-dev openmpi-bin
 
     - name: CMake composite steps (build, test, install, examples)
       uses: ./.github/workflows/composite-cmake
@@ -84,7 +84,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install --no-install-recommends \
-            libopenmpi-dev openmpi
+            libopenmpi-dev openmpi-bin
 
     - name: CMake composite steps (build, test, install, examples)
       uses: ./.github/workflows/composite-cmake
@@ -110,7 +110,7 @@ jobs:
       run: |
         sudo apt-get update -yq
         sudo apt-get install -yq --no-install-recommends \
-            libopenmpi-dev openmpi valgrind
+            libopenmpi-dev openmpi-bin valgrind
 
     - name: Checkout source code
       uses: actions/checkout@main
