@@ -122,7 +122,7 @@ jobs:
           tar -xvf mpich-5.0.2.tar.gz
           cd mpich-5.0.2
           ./configure --prefix="/usr/local/mpich"
-          sudo make install
+          sudo make install -j
           cd ../libsc
 
     - name: Checkout source code
