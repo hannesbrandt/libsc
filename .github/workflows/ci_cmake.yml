@@ -91,7 +91,7 @@ jobs:
 
 
   linux-valgrind:
-    needs: ubuntu-24
+    needs: ubuntu-latest
     runs-on: ubuntu-24.04
     name: Valgrind Linux mpi=${{ matrix.mpi }} CC=${{ matrix.cc }}
     timeout-minutes: 60

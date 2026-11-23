@@ -21,7 +21,7 @@ env:
 jobs:
 
   linux-multi:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     name: Autotools build on Linux
     steps:
 
@@ -109,7 +109,7 @@ jobs:
           ./**/test/*.log
 
   linux-valgrind:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     name: Autotools with valgrind
     steps:
 
@@ -147,7 +147,7 @@ jobs:
           ./**/test/*.log
 
   linux-tarball:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     name: Pack tarball on Linux
     steps:
 
